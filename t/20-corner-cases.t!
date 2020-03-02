@@ -1,0 +1,52 @@
+#!perl -T
+use 5.006;
+use strict;
+use warnings;
+use Test::More;
+use Data::Dumper;
+$Data::Dumper::Useqq = 1;
+
+use Decl::Document;
+
+my $input;
+my $d;
+
+
+# This is a place to put the weirder texts that break the parser.
+# Ideally I'd do Perl fuzz testing.
+
+$input = <<'EOF';
+-
+EOF
+
+$d = Decl::Document->from_string ($input);
+diag "how bout?";
+
+
+$input = <<'EOF';
+-
+EOF
+
+$d = Decl::Document->from_string ($input);
+diag "how bout?";
+
+# This one's OK, though.
+$input = <<'EOF';
+-
+tag
+EOF
+
+$d = Decl::Document->from_string ($input);
+diag "how bout?";
+
+$input = <<'EOF';
+- huh
+
+EOF
+
+$d = Decl::Document->from_string ($input);
+diag "how bout?";
+
+
+
+done_testing();

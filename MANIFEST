@@ -1,0 +1,17 @@
+Changes
+lib/Decl/Document.pm
+lib/Decl/Node.pm
+lib/Decl/Syntax/Line.pm
+lib/Decl/Syntax/Sexp.pm
+lib/Decl/Syntax/Tabular.pm
+lib/Decl/Syntax/Tagged.pm
+lib/Decl/Syntax/Text.pm
+lib/Decl/Syntax/Textplus.pm
+lib/Decl/Syntax/Xexp.pm
+Makefile.PL
+MANIFEST			This list of files
+README
+t/00-load.t
+t/manifest.t
+t/pod-coverage.t
+t/pod.t
