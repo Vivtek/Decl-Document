@@ -6,6 +6,7 @@ use warnings;
 use List::Util;
 use Decl::Syntax::Tagged;
 use Decl::Document;
+use Iterator::Records;
 use Carp qw(cluck);
 
 =head1 NAME
@@ -84,7 +85,13 @@ sub new_from_line {
    Decl::Syntax::Tagged::node_from_line_parse (undef, $string, Decl::Syntax::Tagged::parse_line($string));
 }
 sub new_from_string {
-   
+   my $class = shift;
+   my $string = shift;
+   if (scalar @_) {
+      $string = sprintf ($string, @_);
+   }
+   my $document = Decl::Document->from_string ($string);
+   return $document->content;
 }
 
 =head2 STATUS: warnings()
@@ -345,7 +352,9 @@ sub dcode_n {
    return @{$self->{code}->[$n]};
 }
 
-=head2 ON-LINE OR CHILD TEXT/CODE: has_text, text_type(#), text(#), has_code, code_type, code(#)
+=head2 ON-LINE OR CHILD TEXT/CODE: has_text, text_type(#), text(#), has_code, code_type, code
+
+
 
 =cut
 
@@ -430,21 +439,67 @@ sub add_child {
 
 =head1 SEARCHING AND WALKING
 
- section search "Searching": this needs rethinking and reimplementation on an iterated basis, probably using walk_depth_first
-  - match (match)
-  - match_or (match)
-  - match_not (match)
-  - match_nor (match)
-  - first_match (match, depth): the depth is a maximum depth
-  - first (tag, depth)
-  - all (match)
-  - find (path): gets a descendant node by path; the path should look for tags or names I suppose
- section walking "Walking"
-  - walk_depth_first (coderef)
+=head2 iterate ([field extractor])
+
+The basic nodal structure iterator, this returns an L<Iterator::Records> iterator that does a depth-first walk of the node and its children.
+
+Takes a coderef that, if given a node, returns a list of fields for that node, but if given an undef value, returns an arrayref of the names of those fields. If no coderef is supplied,
+a default is used which simply has the node visited as its single column.
+
+=cut
+
+sub iterate {
+   my $self = shift;
+   my $extractor = shift || \&_default_iterate_extractor;
+   
+   my $sub = sub {
+      my @stack = ([$self]);
+      
+      sub {
+         START_OVER:
+         return unless scalar @stack;
+         if (not scalar @{$stack[0]}) {
+            shift @stack;
+            goto START_OVER;
+         }
+         my $next = shift @{$stack[0]};
+         unshift @stack, [$next->children];
+         
+         return $extractor->($next, scalar (@stack) - 2);
+      }
+   };
+   Iterator::Records->new($sub, $extractor->());
+}
+
+sub _default_iterate_extractor {
+   my $self = shift;
+   my $level = shift;
+   
+   return ['node'] unless defined $self;
+   return [$self];
+}
+
+=head2 walk (coderef}
+
+Given a coderef, C<walk> walks the node structure and calls the coderef on each node it finds. It returns a count of the nodes visited.
+
+=cut
+
+sub walk {
+   my $self = shift;
+   my $coderef = shift;
+   return 0 unless $coderef;
+   
+   my $i = $self->iterate->iter;
+   my $count = 0;
+   while (my $row = $i->()) {
+      $count += 1;
+      $coderef->($row->[0]);
+   }
+   return $count;
+}
 
 =head1 INTROSPECTION
-
-
 
 =head2 canon_syntax
 
