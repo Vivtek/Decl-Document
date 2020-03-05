@@ -54,11 +54,15 @@ EOF
 
 
 # Now let's add an out-of-band value. This part of the API is pretty simple.
+ok (not $n->has_oob);
 $n->set_oob("this is a value");
-diag $n->oob();
+ok ($n->has_oob);
+is ($n->oob(), 'this is a value');
 $n->set_oob('x', 5);
-diag $n->oob();
-diag $n->oob('x');
-diag $n->oob('');
+is ($n->oob(), 'this is a value');
+is ($n->oob('x'), 5);
+$n->no_oob;
+ok (not $n->has_oob);
+
 
 done_testing();

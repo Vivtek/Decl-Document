@@ -448,6 +448,33 @@ sub add_child {
    return $child;
 }
 
+=head2 has_oob, no_oob, set_oob, oob
+
+Each node can optionally have an out-of-band value, or multiple named out-of-band values. This is useful when the nodal structure either has
+a generated semantic pole or spans some set of data structures. There is no syntax for out-of-band values (which is why they're out of band).
+
+=cut
+
+sub has_oob { defined $_[0]->{oob} || defined $_[0]->{named_oob} }
+sub no_oob {
+   delete $_[0]->{oob};
+   delete $_[0]->{named_oob};
+}
+sub set_oob {
+   my ($self, $key, $value) = @_;
+   if (defined $value) {
+      $self->{named_oob}->{$key} = $value;
+      return $value;
+   }
+   $self->{oob} = $key;
+   return $key;
+}
+sub oob {
+   my ($self, $key) = @_;
+   return $self->{named_oob}->{$key} if defined $key;
+   $self->{oob};
+}
+
 =head1 LOCATION BY PATH
   - path
   - location
