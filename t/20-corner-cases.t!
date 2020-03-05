@@ -7,10 +7,11 @@ use Data::Dumper;
 $Data::Dumper::Useqq = 1;
 
 use Decl::Document;
+use Decl::Node;
 
 my $input;
 my $d;
-
+my $n;
 
 # This is a place to put the weirder texts that break the parser.
 # Ideally I'd do Perl fuzz testing.
@@ -46,6 +47,31 @@ EOF
 
 $d = Decl::Document->from_string ($input);
 diag "how bout?";
+
+# 2020-03-05 - encountered while testing node text retrieval.
+$n = Decl::Node->new_from_string(<<'EOF');
+n
+ t1: some simple dtext with
+     a couple of lines
+        
+ t2:. blocktext, which will
+      parse down
+     
+      to multiple paragraphs
+     
+      +tag: blah blah
+     
+ t3:
+   And some off-line text
+   of a couple of lines 
+   
+   with a blank?     
+EOF
+diag $n->debug_structure;
+diag $n->child_n(1)->debug_hash;
+diag $n->{document}->list_subdocuments->canon_syntax;
+diag $n->child_n(1)->child_n(0)->{document}->{type};
+diag $n->canon_syntax;
 
 
 

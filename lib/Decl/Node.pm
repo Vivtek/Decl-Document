@@ -354,9 +354,24 @@ sub dcode_n {
 
 =head2 ON-LINE OR CHILD TEXT/CODE: has_text, text_type(#), text(#), has_code, code_type, code
 
-
-
 =cut
+
+sub has_text {
+   my $self = shift;
+   return 1 if $self->has_dtext;
+   return 1 if $self->has_sigil;
+   return 0;
+}
+sub text_type { $_[0]->sigil }
+sub text {
+   my $self = shift;
+   return $self->dtext if $self->has_dtext;
+   return unless $self->has_children;
+   if ($self->child_n(0)->{parsed_from_dtext}) {
+      return $self->child_n(0)->canon_syntax;
+   }
+   $self->child_n(0)->dtext;
+}
 
 sub has_code {
    my $self = shift;

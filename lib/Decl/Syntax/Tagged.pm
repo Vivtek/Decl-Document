@@ -55,13 +55,13 @@ sub parse {
    $node->{subdoc_type} = $type;
    
    if ($node->has_dtext) { # If there is dtext on the line after the sigil, and the line after it is indented to align with it, then create and extend a subdocument to include the indented text.
-      ($linenum, $indent, $text) = $cursor->peek;
-      if (defined $indent && $indent >= $node->{dtext_indent}) {
+      my ($linenum, $lineindent, $text) = $cursor->peek;
+      if (defined $lineindent && $lineindent >= $node->{dtext_indent}) {
          my $subdoc = $context->subdocument (line=>$node->{linenum}, indent=>$node->{dtext_indent}, for=>2);
          $subdoc->{type} = $context->type_from_sigil ($node->sigil);
 
          $cursor->next;
-         $cursor->extend_subdocument ($subdoc, $node->{indent}+$node->{dtext_indent});
+         $cursor->extend_subdocument ($subdoc, $node->{dtext_indent});
          $node->dtext ($subdoc);
       }
    }

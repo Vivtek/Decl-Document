@@ -82,6 +82,16 @@ block:+ Here's some text
         
         +tag: Did this get a line number?
 EOF
-diag Dumper($n2->iterate(\&extractor_linenum)->load);
+is_deeply ($n2->iterate(\&extractor_linenum)->load,
+ [
+   ['block', 0, 1],
+   ['', 1, undef],
+   ['', 2, 1],
+   ['', 2, undef],
+   ['"', 2, 4],
+   ['', 3, 4],
+   ['', 2, undef],
+   ['tag', 2, 7]
+ ]);
 
 done_testing();
