@@ -91,7 +91,7 @@ sub new_from_string {
       $string = sprintf ($string, @_);
    }
    my $document = Decl::Document->from_string ($string);
-   return $document->content;
+   return $document->{content}; # Note: this will be the invisible node if our string had multiple tags at the top level.
 }
 
 =head2 STATUS: warnings()
@@ -119,6 +119,16 @@ sub is_separator { $_[0]->{separator} }
 sub is  {$_[0]->is_sigiled ? $_[0]->sigil eq $_[1] : $_[0]->{tag} eq $_[1]}
 sub pseudo {$_[0]->{pseudo}}
 
+=head2 parent(), root()
+
+Scans upward through the current node's parents until it gets to the topmost (the one with no parent) and returns that.
+
+=cut
+
+sub parent { $_[0]->{parent} }
+sub root { $_[0]->{parent} || $_[0]; }
+
+
 =head2 NAMES: has_name, names, name([new name]), name_n(#), add_name, no_name
 =cut
 sub has_name {
@@ -139,6 +149,14 @@ sub name {
    }
    $self->{names} = [@_];
    $self->{names}->[0];
+}
+sub name_is {
+   my $self = shift;
+   my $name = shift;
+   return 0 unless defined $name;
+   return 0 unless defined $self->{names};
+   foreach my $n (@{$self->{names}}) { return 1 if $name eq $n }
+   return 0;
 }
 sub no_name  { delete $_[0]->{names}; }
 sub add_name {
@@ -355,7 +373,6 @@ sub dcode_n {
 =head2 ON-LINE OR CHILD TEXT/CODE: has_text, text_type(#), text(#), has_code, code_type, code
 
 =cut
-
 sub has_text {
    my $self = shift;
    return 1 if $self->has_dtext;
@@ -476,8 +493,112 @@ sub oob {
 }
 
 =head1 LOCATION BY PATH
-  - path
-  - location
+
+Each node in a structure can be found by its location, and can report its own path. (Invisible nodes created for parsing reasons don't show up in the path scheme.)
+
+=head2 path([separator])
+
+Reports the path's node. You can optionally specify a separator character, like '.' or '/' or '-'. The default is '.'. In list context, returns the list of path elements
+instead of a simple string.
+
+=cut
+
+sub path {
+   my $self = shift;
+   my $sep = shift || '.';
+   
+   if (not defined $self->{path}) {
+      if ($self->{parent}) {
+         $self->{path} = [$self->{parent}->path];
+      } else {
+         $self->{path} = [];
+      }
+      
+      # Now add our own path element onto the list
+      
+   }
+   return wantarray ? @{$self->{path}} : join ($sep, @{$self->{path}});
+}
+
+
+=head2 loc(path)
+
+Goes to the path specified *relative to this node*. This may be a list or a string separated by '.', '/', or '-'.
+In the special case that this node has no parent and is not invisible, the first element of the path will be consumed if it matches the current node.
+If called without a path, returns the node.
+
+=cut
+
+sub loc {
+   my $self = shift;
+   return $self unless scalar @_;
+   my @path;
+   if (scalar @_ == 1) {
+      @path = split m|[./-]|, shift;
+   } else {
+      @path = @_;
+   }
+   #print STDERR "searching " . $self->tag . " for " . join('.', @path) . "\n";
+   
+   my $elem = shift @path;
+   if (not $self->{parent} and not $self->invisible) {
+      if ($self->_element_match ($elem)) {
+         return @path ? $self->loc (@path) : $self;
+      }
+   }
+   my @children = $self->_path_children;
+   foreach my $child (@children) {
+      if ($child->_element_match ($elem, @children)) {
+         return @path ? $child->loc (@path) : $child;
+      }
+   }
+   return undef; # Didn't find it, sorry.
+}
+sub _element_match {
+   my $self = shift;
+   my $elem = shift;
+
+   my $offset = 0;
+   if ($elem =~ /(.*)\((.*)\)/) {
+      $elem = $1;
+      $offset = $2;
+   }
+   if (not $offset) {
+      if ($elem) {
+         return 1 if $elem eq $self->tag;
+         return 0;
+      }
+      return 0 unless @_;
+      return 1 if $_[0] eq $self;
+      return 0;
+   }
+   if (not $elem) {
+      return 1 if $self->name_is($offset);
+      return 0 if $offset =~ /\D/; # Non-numeric and didn't match the name.
+      return 0 unless defined $_[$offset];
+      return 1 if defined $_[$offset] and $_[$offset] == $self;
+      return 0;
+   }
+   return 0 if $elem ne $self->tag;
+   return 1 if $self->name_is($offset);
+   return 0 if $offset =~ /\D/; # Non-numeric.
+   my @like_named = grep { $_->tag eq $elem } @_;
+   return 1 if defined $like_named[$offset] and $like_named[$offset] == $self;
+   return 0;
+}
+sub _path_children {
+   my $self = shift;
+   
+   my @children = ();
+   foreach my $child ($self->children) {
+      if ($child->invisible) {
+         push @children, $child->_path_children;
+      } else {
+         push @children, $child;
+      }
+   }
+   @children;
+}
 
 =head1 SEARCHING AND WALKING
 
