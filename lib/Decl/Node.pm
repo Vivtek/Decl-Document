@@ -428,14 +428,14 @@ sub has_children {
 sub children {
    my $self = shift;
    return wantarray ? () : 0 unless defined $self->{children};
-   return map { $_->[0] } @{$self->{children}};
+   return @{$self->{children}};
 }
 sub no_children  { delete $_[0]->{children}; }
 sub child_n {
    my $self = shift;
    my $n = shift || 0;
    return unless defined $self->{children};
-   $self->{children}->[$n]->[0];
+   $self->{children}->[$n];
 }
 
 
@@ -449,20 +449,17 @@ Note that unlike 2015, all children are nodes; some are text nodes within a text
 
 =head2 add_child (node)
 
-Adds a node to the child list. Sets the child's parent.
+Adds nodes to the child list. Sets the parent for each child added.
 
 =cut
 
 sub add_child {
-   my ($self, $child, $subdocument) = @_;
-   return unless defined $child;
-   if (defined $subdocument) {
-      $subdocument->{owning_node} = $self;
-   } else {
+   my $self = shift;
+   for my $child (@_) {
       $child->{parent} = $self;
+      push @{$self->{children}}, $child;
    }
-   push @{$self->{children}}, [$child, $subdocument];
-   return $child;
+   return $_[0];
 }
 
 =head2 has_oob, no_oob, set_oob, oob
@@ -506,29 +503,67 @@ instead of a simple string.
 sub path {
    my $self = shift;
    my $sep = shift || '.';
+
    
    if (not defined $self->{path}) {
       if ($self->{parent}) {
-         $self->{path} = [$self->{parent}->path];
+         $self->{parent}->path;
+         $self->{path} = [@{$self->{parent}->{path}}];
       } else {
          $self->{path} = [];
       }
       
-      # Now add our own path element onto the list
-      
+      return if $self->invisible;
+      return if $self->is_separator;
+
+      # Now add our own path element onto the list; to this this we'll need a list of sibs
+      my $tag = $self->tag;
+      my $offset = 0;
+      if ($self->_cache_path_sibs) {
+         for my $sib ($self->_cache_path_sibs) {
+            last if $sib == $self;
+            if ($tag) {
+               $offset += 1 if $sib->tag eq $tag;
+            } else {
+               $offset += 1;
+            }
+         }
+      }
+      if ($tag) {
+         push @{$self->{path}}, $offset ? "$tag($offset)" : $tag;
+      } else {
+         push @{$self->{path}}, "($offset)";
+      }
    }
+   
+   return if $self->invisible;
+   return if $self->is_separator;
    return wantarray ? @{$self->{path}} : join ($sep, @{$self->{path}});
 }
 
+sub _cache_path_sibs {
+   my $self = shift;
+   return () unless $self->parent;
+   $self->parent->_cache_path_children;
+}
 
-=head2 loc(path)
+
+=head2 loc(path), locf(path, parms)
 
 Goes to the path specified *relative to this node*. This may be a list or a string separated by '.', '/', or '-'.
 In the special case that this node has no parent and is not invisible, the first element of the path will be consumed if it matches the current node.
 If called without a path, returns the node.
 
+The *f variant formats the path as a sprintf string before doing loc.
+
 =cut
 
+sub locf {
+   my $self = shift;
+   my $path = shift;
+   $path = sprintf ($path, @_);
+   $self->loc($path);
+}
 sub loc {
    my $self = shift;
    return $self unless scalar @_;
@@ -588,9 +623,11 @@ sub _element_match {
 }
 sub _path_children {
    my $self = shift;
-   
+
+   return @{$self->{cached_path_children}} if $self->{cached_path_children};
    my @children = ();
    foreach my $child ($self->children) {
+      next if $child->is_separator;
       if ($child->invisible) {
          push @children, $child->_path_children;
       } else {
@@ -598,6 +635,12 @@ sub _path_children {
       }
    }
    @children;
+}
+sub _cache_path_children {
+   my $self = shift;
+   return @{$self->{cached_path_children}} if $self->{cached_path_children};
+   $self->{cached_path_children} = [$self->_path_children];
+   return $self->{cached_path_children};
 }
 
 =head1 SEARCHING AND WALKING
@@ -700,9 +743,7 @@ sub canon_syntax {
    #$child_indent = $indent + 4 unless $self->{invisible};
    my $first_child = 1;
    
-   foreach my $child (@{$self->{children}}) {
-      my ($child_node, $subdoc) = @$child;
-      
+   foreach my $child_node (@{$self->{children}}) {
       my $child_text = '';
       my $local_indent = $child_indent;
       $local_indent = $dtext_child_indent if $child_node->{parsed_from_dtext};

@@ -139,7 +139,6 @@ sub parse_blocktext {
          $punct =~ s/\s+//;
          
          if ($subdoc) { # If there's a pending paragraph, emit it
-            #print STDERR "Finished subdoc on blank line\n";
             push @outputnodes, _make_output_node ($subdoc, $type, $type[0]);
             $subdoc = undef;
          }
@@ -153,6 +152,10 @@ sub parse_blocktext {
          $blockquote->sigil ($punct);
          push @outputnodes, $blockquote;
       } elsif ($tagesc && $$linetext =~ /^\Q$tagesc\E/) { # We are in a textplus mode and the line starts with the escape character?
+         if ($subdoc) { # If there's a pending paragraph, emit it
+            push @outputnodes, _make_output_node ($subdoc, $type, $type[0]);
+            $subdoc = undef;
+         }
          my $escnode = Decl::Syntax::Tagged->parse ($context, $cursor, 'tag', $tagesc);
          $escnode->{esc_char} = $tagesc;
          push @outputnodes, $escnode;

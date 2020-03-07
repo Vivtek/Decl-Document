@@ -80,8 +80,14 @@ n n3
     t: some text
     t: more text
     t: yet more text
+    : some loose text here
+    : some more
+    :+ yeah, textplus
+       is always rockin
+       +date: 2020-03-05
 EOF
 
+#diag $n2->canon_syntax;
 #diag $n2->debug_structure;
 is ($n2->loc('t(one)')->canon_line, 't one');
 is ($n2->loc('t(something)')->canon_line, 't something');
@@ -89,5 +95,64 @@ is ($n2->loc('(3)')->canon_line, 't something');
 is ($n2->loc('t(2)')->canon_line, 't something');
 is ($n2->loc('n/t(2)/(1)')->text, 'more text');
 is ($n2->loc('t(something)/(0)')->text, 'some text');
+is ($n2->loc('t(something)/(3)')->text, 'some loose text here');
+is ($n2->loc('t(something)/:')->text, 'some loose text here'); # The sigil of a sigiled node counts as a tag for location (and for everything, actually)
+is ($n2->loc('t(something)/:(1)')->text, 'some more');
+is ($n2->loc('t(something)/:+/date')->text, '2020-03-05'); # Yeah, this kinda rocks
+
+
+is ($n2->locf('t(%s)', 'one')->canon_line, 't one');
+is ($n2->locf('(%d)', 3)->canon_line, 't something');
+is ($n2->locf('t(%s)', 2)->canon_line, 't something');
+is ($n2->locf('t(%s)/(%d)', 'something', 3)->text, 'some loose text here');
+
+# Now let's walk that whole thing and ask every node for its path
+#diag $n->debug_structure;
+#diag $n->loc('t3.(0)')->debug_hash;
+my $iter = $n->iterate(sub {
+   my $self = shift;
+   my $level = shift;
+   
+   return ['tag', 'path'] unless defined $self;
+   return [$self->tag, scalar $self->path];
+});
+is_deeply ($iter->load(), [
+  ['n', 'n'],
+  ['t1', 'n.t1'],
+  ['t2', 'n.t2'],
+  ['', undef],
+  ['', 'n.t2.(0)'],
+  ['', undef],
+  ['', 'n.t2.(1)'],
+  ['', undef],
+  ['tag', 'n.t2.tag'],
+  ['t3', 'n.t3'],
+  ['', 'n.t3.(0)'],
+]);
+
+$iter = $n2->iterate(sub {
+   my $self = shift;
+   my $level = shift;
+   
+   return ['tag', 'path'] unless defined $self;
+   return [$self->tag, scalar $self->path];
+});
+is_deeply ($iter->load(), [
+  ['n', 'n'],
+  ['t', 'n.t'],
+  ['t', 'n.t(1)'],
+  ['not', 'n.not'],
+  ['t', 'n.t(2)'],
+  ['t', 'n.t(2).t'],
+  ['t', 'n.t(2).t(1)'],
+  ['t', 'n.t(2).t(2)'],
+  [':', 'n.t(2).:'],
+  [':', 'n.t(2).:(1)'],
+  [':+', 'n.t(2).:+'],
+  ['', undef],
+  ['', 'n.t(2).:+.(0)'],
+  ['date', 'n.t(2).:+.date'],
+]);
+
 
 done_testing();

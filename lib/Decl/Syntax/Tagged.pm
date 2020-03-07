@@ -98,7 +98,8 @@ sub parse {
    $next_line = $cursor->peek;
    ($linenum, $indent, $text) = @$next_line;
    foreach my $return_node (Decl::Syntax::Text->parse ($context, $cursor, $context->type_from_sigil ($node->sigil))) {
-      $node->add_child ($return_node, $return_node->{document});
+      $node->add_child ($return_node);
+      $return_node->{document}->{owning_node} = $node;
    }
    
    return $node;
