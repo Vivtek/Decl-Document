@@ -96,6 +96,7 @@ sub parse {
    # If we *do* have a sigil but our dtext didn't start on the parent node, then our content is text and depends on the sigil. Initially we'll just assume a
    # sigil means text, and done. The first line of the content text determines its indentation. TODO: back out indentation as far as the sigil, if appropriate lines encountered.
    $next_line = $cursor->peek;
+   return $node unless $next_line; # This takes care of the case of an empty sigil at the end of the file.
    ($linenum, $indent, $text) = @$next_line;
    foreach my $return_node (Decl::Syntax::Text->parse ($context, $cursor, $context->type_from_sigil ($node->sigil))) {
       $node->add_child ($return_node);

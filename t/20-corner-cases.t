@@ -21,15 +21,7 @@ $input = <<'EOF';
 EOF
 
 $d = Decl::Document->from_string ($input);
-diag "how bout?";
-
-
-$input = <<'EOF';
--
-EOF
-
-$d = Decl::Document->from_string ($input);
-diag "how bout?";
+ok ($d);
 
 # This one's OK, though.
 $input = <<'EOF';
@@ -38,7 +30,7 @@ tag
 EOF
 
 $d = Decl::Document->from_string ($input);
-diag "how bout?";
+ok ($d);
 
 $input = <<'EOF';
 - huh
@@ -46,7 +38,7 @@ $input = <<'EOF';
 EOF
 
 $d = Decl::Document->from_string ($input);
-diag "how bout?";
+ok ($d);
 
 # 2020-03-05 - encountered while testing node text retrieval.
 $n = Decl::Node->new_from_string(<<'EOF');
@@ -67,11 +59,7 @@ n
    
    with a blank?     
 EOF
-diag $n->debug_structure;
-diag $n->child_n(1)->debug_hash;
-diag $n->{document}->list_subdocuments->canon_syntax;
-diag $n->child_n(1)->child_n(0)->{document}->{type};
-diag $n->canon_syntax;
+ok ($n);
 
 
 

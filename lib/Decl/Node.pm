@@ -984,9 +984,7 @@ sub debug_structure {
    
    my $text = ' ' x $indent . $self->debug_line . "\n";
    
-   foreach my $child (@{$self->{children}}) {
-      my ($child_node, $subdoc) = @$child;
-      
+   foreach my $child_node (@{$self->{children}}) {
       $text .= $child_node->debug_structure ($indent + 2);
    }
    $text;
