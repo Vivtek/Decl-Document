@@ -417,6 +417,27 @@ sub content    {
    return $self->{content}->children;
 }
 
+=head2 content_loc, content_locf, content_iterate
+
+Finds a content node by path or runs an iterator against the content
+
+=cut
+sub content_loc {
+   my $self = shift;
+   return unless $self->{content};
+   $self->{content}->loc(@_);
+}
+sub content_locf {
+   my $self = shift;
+   return unless $self->{content};
+   $self->{content}->locf(@_);
+}
+sub content_iterate {
+   my $self = shift;
+   return unless $self->{content};
+   $self->{content}->iterate(@_);
+}
+
 =head2 type
 
 =cut

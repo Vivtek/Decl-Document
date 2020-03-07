@@ -64,15 +64,18 @@ sub new_container {
    return $self;
 }
 
-=head2 new_from_line, new_from_string
+=head2 new_from_line, new_from_string, new_from_hash
 
 There are times when we want a scratch node outside the document structure. I don't currently see how we can get away without any document at all, but
 it can be lightweight. The key here is that we want the node, not the document, as our convenient output.
 
-We have two flavors. "New from line" literally parses a single node from a line, and stops when it gets to a line break. This is the only way to guarantee
+We have three flavors. "New from line" literally parses a single node from a line, and stops when it gets to a line break. This is the only way to guarantee
 that the parser will never need a document context, and will be absolutely sufficient for scratch nodes. "New from string" builds a minimal document but returns
 the node parsed. That node will be the content node from the document, that is, a normal node if the string defines one tag, or an invisible container if it
 defines more than one.
+
+Finally, "new from hash" takes a hash of predictably named fields (tag, name, sigil, text) and does the right thing. This is intended to be pretty sloppy;
+it's just for quick scratch nodes, so that's all that's supported. Real creation of nodes from data structures is a semantic operation.
 
 =cut
 
@@ -92,6 +95,56 @@ sub new_from_string {
    }
    my $document = Decl::Document->from_string ($string);
    return $document->{content}; # Note: this will be the invisible node if our string had multiple tags at the top level.
+}
+sub new_from_hash {
+   my $class = shift;
+   my $hash = shift || {};
+   my $self;
+   if ($hash->{tag}) {
+      $self = $class->new_from_line ($hash->{tag});
+      $self->name ($hash->{name}) if $hash->{name};
+      if (defined $hash->{text}) {
+         my $sigil = $hash->{sigil} || ':';
+         $self->sigil($sigil);
+         $self->dtext($hash->{text});
+      } elsif (defined $hash->{sigil}) {
+         $self->sigil($hash->{sigil});
+      }
+      
+      return $self;
+   }
+   # No tag?
+   if (defined $hash->{text}) {
+      return $class->new_as_text ($hash->{dtext}, $hash->{sigil});
+   }
+   # Not even text?
+   return $class->new_from_line ('tag');
+}
+
+=head2 copy ()
+
+Creates a copy of the tag provided, by the simple expedient of asking for its canonical syntax and reparsing it.
+
+=cut
+
+sub copy { Decl::Node->new_from_string ($_[0]->canon_syntax) }
+
+=head2 new_as_text (text, [sigil]), new_separator()
+
+Creates a text node (sigiled if necessary) or a separator for blocktext.
+
+=cut
+
+sub new_as_text {
+   my $class = shift;
+   my $text = shift;
+   my $sigil = shift;
+   
+   my $self = { tag => '', text => $text };
+   bless ($self, $class);
+   $self->sigil($sigil) if defined $sigil;
+   return $self;
+
 }
 
 =head2 STATUS: warnings()
@@ -115,6 +168,7 @@ The pseudotag opening bracket is returned for a [pseudotag].
 sub is_sigiled { $_[0]->has_sigil && ($_[0]->{tag} eq '' || $_[0]->{tag} eq $_[0]->{sigil})}
 sub tag {$_[0]->is_sigiled ? $_[0]->sigil : $_[0]->{tag}}
 sub is_tagless { $_[0]->tag ? 0 : 1 }
+sub is_text { $_[0]->{tag} eq '' and not $_[0]->is_separator and not $_[0]->invisible }
 sub is_separator { $_[0]->{separator} }
 sub is  {$_[0]->is_sigiled ? $_[0]->sigil eq $_[1] : $_[0]->{tag} eq $_[1]}
 sub pseudo {$_[0]->{pseudo}}
@@ -447,18 +501,150 @@ We can add, replace, and delete child nodes.
 Note that unlike 2015, all children are nodes; some are text nodes within a textual subdocument (the document can be vestigial).
 
 
-=head2 add_child (node)
+=head2 add_child (node(s)), add_child_at (offset, node(s))
 
-Adds nodes to the child list. Sets the parent for each child added.
+Adds one or more nodes to the child list. Sets the parent for each child added. Returns the first node added. If you want to add the new nodes
+somewhere other than at the end of the list, use the _at variant.
 
 =cut
 
 sub add_child {
    my $self = shift;
+   $self->{children} = $self->_push_children ($self->{children}, @_);
+   return $_[0];
+}
+sub _correct_sigil {
+   my $self = shift;
+   return delete $self->{sigil} unless $self->{children};
+   return delete $self->{sigil} unless $self->{children}->[0];
+   return delete $self->{sigil} unless $self->{children}->[0]->is_text;
+   $self->{sigil} = $self->{children}->[0]->{sigil} || ':';
+}
+sub _push_children {
+   my $self = shift;
+   my $list = shift || [];
    for my $child (@_) {
       $child->{parent} = $self;
-      push @{$self->{children}}, $child;
+      push @$list, $child;
    }
+   $self->clear_path_cache;
+   return $list;
+}
+
+sub add_child_at {
+   my $self = shift;
+   my $offset = shift;
+   my @children;
+   for my $sib ($self->children) {
+      $self->_push_children (\@children, @_) if $offset == 0;
+      $offset -= 1;
+      push @children, $sib;
+   }
+   $self->_push_children (\@children, @_) if $offset >= 0;
+   $self->{children} = \@children;
+   $self->_correct_sigil;
+   return $_[0];
+}
+
+=head2 add_before (sib, node{s)), add_after (sib, node(s)), add_child_at (offset, node(s))
+
+These allow a little more control over the child list by inserting nodes anywhere you like.
+
+=cut
+
+sub add_before {
+   my $old = shift;
+   return unless $old->{parent};
+   my $self = $old->{parent};
+   my @children;
+   for my $sib ($self->children) {
+      $self->_push_children (\@children, @_) if $sib eq $old;
+      push @children, $sib;
+   }
+   $self->{children} = \@children;
+   $self->_correct_sigil;
+   return $_[0];
+}
+sub add_after {
+   my $old = shift;
+   return unless $old->{parent};
+   my $self = $old->{parent};
+   my @children;
+   for my $sib ($self->children) {
+      push @children, $sib;
+      $self->_push_children (\@children, @_) if $sib eq $old;
+   }
+   $self->{children} = \@children;
+   $self->_correct_sigil;
+   return $_[0];
+}
+
+=head2 add_child_text (text string, [sigil])
+
+Creates a new text node and appends it to the child list, setting the parent's sigil if necessary. No parsing is done.
+
+=cut
+
+sub add_child_text {
+   my $self = shift;
+   $self->add_child(Decl::Node->new_as_text (@_));
+   $self->_correct_sigil;
+}
+
+=head2 delete (node)
+
+Detaches a node from its parent and closes rank in the sibling list. Doesn't mess with any subdocument content, so if you need to keep a copy
+it's often best to make one explicitly. If the deletion results in a doubled separator in a blocktext, deletes one of the separators as well.
+
+=cut
+
+sub delete {
+   my $self = shift;
+   return $self unless $self->parent;
+   my $parent = $self->parent;
+   delete $self->{parent};
+   my @children;
+   my $last_was_separator = 0;
+   for my $sib ($parent->children) {
+      next if $sib eq $self;
+      next if $sib->is_separator and $last_was_separator;  # If the deletion causes a double separator, undouble it.
+      $last_was_separator = $sib->is_separator;
+      push @children, $sib;
+   }
+   $parent->{children} = \@children;
+   $parent->clear_path_cache; # In case we want to iterate paths after the change.
+   $parent->_correct_sigil;
+   return $self;
+}
+sub _clear_path_cache {
+   my $self = shift;
+   delete $self->{path};
+   delete $self->{cached_path_children};
+}
+sub clear_path_cache {
+   $_[0]->walk (\&_clear_path_cache);
+}
+
+=head2 replace (node, node(s))
+
+This removes the first node and replaces it with whatever new nodes follow.
+
+=cut
+
+sub replace {
+   my $old = shift;
+   return unless $old->{parent};
+   my $self = $old->{parent};
+   my @children;
+   for my $sib ($self->children) {
+      if ($sib eq $old) {
+         $self->_push_children (\@children, @_);
+      } else {
+         push @children, $sib;
+      }
+   }
+   $self->{children} = \@children;
+   $self->_correct_sigil;
    return $_[0];
 }
 
@@ -748,8 +934,8 @@ sub canon_syntax {
       my $local_indent = $child_indent;
       $local_indent = $dtext_child_indent if $child_node->{parsed_from_dtext};
       
-      if ($child_node->is_tagless and not $child_node->invisible) {
-         if ($child_node->{subdoc_type0} eq 'code') {
+      if ($child_node->{tag} eq '' and not $child_node->invisible) {
+         if (defined $child_node->{subdoc_type0} && $child_node->{subdoc_type0} eq 'code') {
             $child_text .= ref $child_node->{text} ? $child_node->{text}->extract_string (indent=>$local_indent)
                                                       : length ($child_node->{text}) ? ' ' x $local_indent . $child_node->{text} . "\n" : '';
             if ($child_node->{close_bracket}) {
@@ -765,8 +951,15 @@ sub canon_syntax {
             } else {
                if ($first_child and $child_node->{parsed_from_dtext}) {
                   $child_text .= $child_node->{text};
+               } elsif ($first_child) {
+                  my $text = $child_node->{text};
+                  my $indent_text = ' ' x $local_indent;
+                  $text =~ s/\n/\n$indent_text/g;
+                  $text .= "\n" unless $text =~ /\n$/;
+
+                  $child_text .= ' ' x $local_indent . $text;
                } else {
-                  $child_text .= ' ' x $local_indent . $child_node->{text};
+                  $child_text = $child_node->canon_syntax ($local_indent, $child_node->{esc_char});
                }
             }
          }

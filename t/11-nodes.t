@@ -154,5 +154,244 @@ is_deeply ($iter->load(), [
   ['date', 'n.t(2).:+.date'],
 ]);
 
+$n2->loc('t(2).:')->delete;
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    t one
+    t two
+    not t
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+is_deeply ($iter->load(), [
+  ['n', 'n'],
+  ['t', 'n.t'],
+  ['t', 'n.t(1)'],
+  ['not', 'n.not'],
+  ['t', 'n.t(2)'],
+  ['t', 'n.t(2).t'],
+  ['t', 'n.t(2).t(1)'],
+  ['t', 'n.t(2).t(2)'],
+  [':', 'n.t(2).:'],
+  [':+', 'n.t(2).:+'],
+  ['', undef],
+  ['', 'n.t(2).:+.(0)'],
+  ['date', 'n.t(2).:+.date'],
+]);
+
+$n2->add_child_at (0, Decl::Node->new_from_line ('new thing'));
+$n2->add_child_at (3, Decl::Node->new_from_line ('newer thing'));
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    new thing
+    t one
+    t two
+    newer thing
+    not t
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+# Make some room.
+$n2->loc('t')->delete;
+$n2->loc('not')->delete;
+$n2->loc('new')->delete;
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    t two
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+$n2->add_child_at (0, Decl::Node->new_from_hash ({tag => 'hash', name=>'tag', text=>'some text'}));
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    hash tag: some text
+    t two
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+is ($n2->loc('hash')->text, 'some text');
+
+$n2->loc('t')->add_child_at(0, Decl::Node->new_as_text ("a text child\nwith two lines"));
+$n2->loc('t')->add_child(Decl::Node->new_as_text ("a second text child", ':!'));
+is ($n2->canon_syntax, <<'EOF');  # Note that this kind of shenanigans break homoiconicity, so use them with caution.
+n n3
+    hash tag: some text
+    t two:
+        a text child
+        with two lines
+        :! a second text child
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+is ($n2->loc('t.(0)')->canon_syntax, <<'EOF');
+: a text child
+  with two lines
+EOF
+ok ($n2->loc('t.(0)')->is_text);
+ok ($n2->loc('t.(1)')->is_text);
+
+$n2->loc('t.(0)')->delete;
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    hash tag: some text
+    t two:!
+        a second text child
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+$n2->loc('t.(0)')->delete;
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    hash tag: some text
+    t two
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+$n2->loc('t')->add_child_text("a text child\nwith two lines");
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    hash tag: some text
+    t two:
+        a text child
+        with two lines
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+$n2->loc('hash')->add_child ($n2->loc('newer')->copy);
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    hash tag: some text
+        newer thing
+    t two:
+        a text child
+        with two lines
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+$n2->loc('hash')->replace ($n2->loc('t(something)/t')->copy);
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    t: some text
+    t two:
+        a text child
+        with two lines
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+$n2->loc('newer')->add_before ($n2->loc('t(something)/t')->copy);
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    t: some text
+    t two:
+        a text child
+        with two lines
+    t: some text
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
+$n2->loc('t')->add_after ($n2->loc('newer')->copy);
+is ($n2->canon_syntax, <<'EOF');
+n n3
+    t: some text
+    newer thing
+    t two:
+        a text child
+        with two lines
+    t: some text
+    newer thing
+    t something
+        t: some text
+        t: more text
+        t: yet more text
+        : some more
+        :+ yeah, textplus
+           is always rockin
+           +date: 2020-03-05
+EOF
+
 
 done_testing();
