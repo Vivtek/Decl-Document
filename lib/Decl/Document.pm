@@ -95,6 +95,10 @@ sub from_string {
 }
 
 sub from_stringf {
+   my $class = shift;
+   my $string = shift;
+   $string = sprintf ($string, @_);
+   return $class->new(string => $string);
 }
 
 =head2 from_document (document)
@@ -443,6 +447,57 @@ sub content_iterate {
 =cut
 
 sub type { $_[0]->{type} }
+
+=head1 INDEXING
+
+=head2 index([indexer])
+
+Returns an iterator as specified by the current indexer (or the default). An indexer can also be supplied explicitly.
+
+=cut
+
+sub index {
+   my $self = shift;
+   carp "Can't index document with no parsed content" unless $self->{content};
+   
+   my $sub = sub {
+      my $iterator = $self->{content}->iterate(\&_indexer_extractor)->iter;
+      
+      sub {
+         ANOTHER:
+         my $node = $iterator->();
+         return unless $node;
+         goto ANOTHER unless $node->[0];       # Tags only
+         goto ANOTHER unless $node->[2] == 1;  # Top-level tags only
+         my $name = $node->[4]->name;
+         $name = $node->[4]->string unless $name;
+         $name = '' unless defined $name;
+         return [
+            $node->[0],
+            $node->[1],
+            $node->[2],
+            $node->[3],
+            $name,
+            $node->[4]->text,
+         ];
+      }
+   };
+   Iterator::Records->new ($sub, ['tag', 'path', 'level', 'linenum', 'name', 'text']);   
+}
+sub _indexer_extractor {
+   my $self = shift;
+
+   return ['tag', 'path', 'level', 'linenum', 'node'] unless $self;
+
+   my @path = $self->path;
+   return [
+      $self->tag,
+      join('/', @path),
+      scalar @path,
+      $self->linenum,
+      $self
+   ];
+}
 
 =head1 PARAMETERIZATION OF PARSING
 
