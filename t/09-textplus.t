@@ -107,4 +107,21 @@ EOF
 
 # 2020-03-01 - and that's textplus.
 
+# 2020-05-23 - an error case discovered while indexing all my notes (lots of dirty text!)
+$input = <<'EOF';
+3. List the main characters and write a page for each:
+   - One-sentence description of that character's storyline
+   - Motivation (abstract desires)
+   - Goal (specific desire)
+EOF
+$d = Decl::Document->from_string ($input, type=>'textplus');
+$c = $d->{content};
+is ($c->canon_syntax, <<'EOF');
+3. List the main characters and write a page for each:
+   - One-sentence description of that character's storyline
+   - Motivation (abstract desires)
+   - Goal (specific desire)
+EOF
+
+
 done_testing();

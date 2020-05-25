@@ -128,7 +128,7 @@ sub parse_blocktext {
          last unless defined $next_line; # The effect of this is to refrain from writing a separator if this blank line is the last thing in the indentation extent.
 
          if ($subdoc) {
-            ##print STDERR "Finished subdoc on blank line\n";
+            #print STDERR "Finished subdoc on blank line\n";
             push @outputnodes, _make_output_node ($subdoc, $type, $type[0]);
             $subdoc = undef;
          }
@@ -137,14 +137,18 @@ sub parse_blocktext {
          my $punct = $1;
          my $new_indent = length($punct);
          $punct =~ s/\s+//;
+         #print STDERR "Line starts with punctuation plus space\n";
          
          if ($subdoc) { # If there's a pending paragraph, emit it
+            #print STDERR "make output node for current subdoc first\n";
             push @outputnodes, _make_output_node ($subdoc, $type, $type[0]);
             $subdoc = undef;
          }
          $cursor->next; # Consume our first line
 
-         my $subsubdoc = $context->subdocument (line=>$linenum, last_line=>$linenum, indent=>$indent + $new_indent);
+         #print STDERR "create subdoc at line $linenum, existing indent $lineindent, new indent $new_indent\n";
+         my $subsubdoc = $context->subdocument (line=>$linenum, last_line=>$linenum, indent=>$lineindent + $new_indent);
+         #print STDERR "then extend it if possible\n";
          $cursor->extend_subdocument ($subsubdoc);
          my $blockquote = _make_output_node ($subsubdoc, $type, $type[0]);
          $subsubdoc->{type} = $type;

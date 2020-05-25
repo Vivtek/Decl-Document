@@ -257,7 +257,7 @@ sub inparm {
    }
    $self->{inparmv}->{$parm};
 }
-sub add_parm { $_[0]->add_inparm(@_); }
+sub add_parm { add_inparm(@_); } # BUG: you idiot
 sub add_inparm {
    my $self = shift;
    my $parm = shift;
@@ -265,7 +265,7 @@ sub add_inparm {
    push @{$self->{inparms}}, $parm;
    $self->{inparmv}->{$parm} = $value;
 }
-sub parm_n { $_[0]->inparm_n(@_); }
+sub parm_n { inparm_n(@_); }
 sub inparm_n {
    my $self = shift;
    my $n = shift || 0;
@@ -857,7 +857,7 @@ sub iterate {
          my $next = shift @{$stack[0]};
          unshift @stack, [$next->children];
          
-         return $extractor->($next, scalar (@stack) - 2);
+         return $extractor->($next, scalar (@stack) - 2); # TODO: is that really the level? It doesn't look like it's being used, thus never tested, thus hmmm.
       }
    };
    Iterator::Records->new($sub, $extractor->());
@@ -953,6 +953,7 @@ sub canon_syntax {
                   $child_text .= $child_node->{text};
                } elsif ($first_child) {
                   my $text = $child_node->{text};
+                  $text = '' unless defined $text; # Not 100% sure this is the right way to handle this, but it will at least eliminate some warnings that shoudn't occur.
                   my $indent_text = ' ' x $local_indent;
                   $text =~ s/\n/\n$indent_text/g;
                   $text .= "\n" unless $text =~ /\n$/;
